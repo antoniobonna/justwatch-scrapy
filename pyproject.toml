@@ -2,14 +2,65 @@
 name = "justwatch-scrapy"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Antonio Bonna <antoniobonna@gmail.com>"]
 readme = "README.md"
 packages = [{include = "justwatch_scrapy", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+ruff = "^0.11.7"
+scrapy = "^2.12.0"
+scrapy-playwright = "^0.0.43"
 
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core", "setuptools"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+# Enable ruff format
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E501: line too long
+# E/F: pycodestyle/Pyflakes errors
+# W: pycodestyle warnings
+# C: complexity (McCabe)
+# I: isort
+# N: naming
+# D: pydocstyle
+# UP: pyupgrade
+# B: flake8-bugbear
+# PL: Pylint
+# RUF: Ruff-specific rules
+select = [
+    "E501",    # line length
+    "Q",       # quotes
+    "I",       # isort
+    "PL",      # pylint
+    "W291",    # trailing whitespace
+    "W292",    # no newline at end of file
+    "W293",    # blank line contains whitespace
+]
+
+[tool.ruff.format]
+quote-style = "double"  # Optional: Use double quotes
+
+[tool.ruff.lint.isort]
+# Your project name
+known-first-party = ["justwatch-scrapy"]
+
+# Ruff automatically detects third-party packages from poetry dependencies
+known-third-party = []
+
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+relative-imports-order = "closest-to-furthest"
+combine-as-imports = true
+split-on-trailing-comma = false

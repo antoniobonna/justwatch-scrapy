@@ -7,6 +7,25 @@ from scrapy import signals
 
 # useful for handling different item types with a single interface
 from itemadapter import is_item, ItemAdapter
+from scrapy.downloadermiddlewares.useragent import UserAgentMiddleware
+import random
+
+
+class RotateUserAgentMiddleware(UserAgentMiddleware):
+    user_agent_list = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+        "coinmarketcap (+http://www.yourdomain.com)",
+    ]
+
+    def __init__(self, user_agent):
+        self.user_agent = user_agent
+
+    def process_request(self, request, spider):
+        try:
+            self.user_agent = random.choice(self.user_agent_list)
+            request.headers.setdefault("User-Agent", self.user_agent)
+        except:
+            pass
 
 
 class ExtractSpiderMiddleware:

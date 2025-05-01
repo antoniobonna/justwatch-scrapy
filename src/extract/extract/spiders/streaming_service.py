@@ -46,7 +46,7 @@ class StreamingServiceSpider(scrapy.Spider):
         Yields:
             scrapy.Request: Request objects for each provider-category combination
         """
-        for provedor in ["apple-tv-plus"]:
+        for provedor in self.provedores:
             for categoria in self.categoria:
                 # Build the URL for this provider-category combination
                 url = f"{self.base_url}/{provedor}/{categoria}"

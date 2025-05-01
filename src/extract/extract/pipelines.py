@@ -11,6 +11,198 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 
+class GraphQLPostgreSQLPipeline:
+    """
+    Pipeline to store scraped items from the GraphQL API in a PostgreSQL database.
+
+    This pipeline saves items to PostgreSQL using pandas and SQLAlchemy.
+    """
+
+    def __init__(self, postgres_uri: str, table_name: str, schema: str, batch_size: int = 100):
+        """
+        Initializes the PostgreSQL pipeline.
+
+        Args:
+            postgres_uri (str): Connection URI for PostgreSQL
+            table_name (str): Name of the table to store the data
+            schema (str): Name of the schema in the database
+            batch_size (int, optional): Number of items to collect before batch saving.
+        """
+        self.postgres_uri = postgres_uri
+        self.table_name = table_name
+        self.schema = schema
+        self.batch_size = batch_size
+        self.items: list[dict[str, Any]] = []
+        self.engine = None
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        """
+        Creates an instance from a crawler.
+
+        This method is used by Scrapy to create your pipeline instance
+        and connect it to the crawler process.
+
+        Args:
+            crawler: The crawler controlling this pipeline
+
+        Returns:
+            GraphQLPostgreSQLPipeline: A new instance of the pipeline
+        """
+        return cls(
+            postgres_uri=crawler.settings.get("POSTGRES_URI"),
+            table_name=crawler.settings.get("POSTGRES_TABLE"),
+            schema=crawler.settings.get("POSTGRES_SCHEMA"),
+            batch_size=crawler.settings.get("POSTGRES_BATCH_SIZE"),
+        )
+
+    def open_spider(self, spider):
+        """
+        Initializes resources when the spider starts.
+
+        Args:
+            spider: The spider being started
+        """
+        # Create SQLAlchemy engine on initialization
+        self.engine = create_engine(self.postgres_uri)
+        self.items = []
+        spider.logger.info(f"PostgreSQL connection established: {self.postgres_uri}")
+
+        try:
+            with self.engine.connect() as conn:
+                spider.logger.info("Connection test successful")
+        except Exception as e:
+            spider.logger.error(f"Connection test failed: {e}")
+
+    def process_item(self, item, spider):
+        """
+        Processes an item scraped by the spider.
+
+        Args:
+            item: The scraped item
+            spider: The spider that scraped the item
+
+        Returns:
+            dict: The processed item
+        """
+        # Add item to the list
+        self.items.append(dict(item))
+
+        # If the batch size is reached, save to the database
+        if len(self.items) >= self.batch_size:
+            self.save_items(spider)
+            self.items = []  # Clear the list after saving
+
+        return item
+
+    def save_items(self, spider):
+        """
+        Saves the collected items to the database.
+
+        Args:
+            spider: The spider that scraped the items
+        """
+        if not self.items:
+            return
+
+        try:
+            # Create DataFrame with the current batch
+            df = pd.DataFrame(self.items)
+
+            # Process the data before saving
+            if not df.empty:
+                df = self.process_dataframe(df)
+
+            # Save to PostgreSQL
+            df.to_sql(
+                name=self.table_name,
+                schema=self.schema,
+                con=self.engine,
+                if_exists="append",  # Append data to the existing table
+                index=False,
+            )
+
+            spider.logger.info(f"{len(self.items)} items saved to table '{self.table_name}'")
+
+            # Clear the item list after saving
+            self.items = []
+
+        except Exception as e:
+            spider.logger.error(f"Error saving data to PostgreSQL: {e}")
+            raise  # Re-raise the exception for Scrapy to handle (if needed)
+
+    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Processes the dataframe to clean and transform the data.
+
+        Transformations:
+        1.  Converts the `duracao_minutos` column to the '%h %min' format.
+        2.  Ensures null values are handled correctly.
+        3.  Adds the 'extract_timestamp' column.
+
+        Args:
+            df: The dataframe to be processed
+
+        Returns:
+            The processed dataframe
+        """
+        df_processed = df.copy()
+
+        # 1. Convert duracao_minutos to '%h %min' format
+        df_processed["duracao"] = df_processed["duracao_minutos"].apply(self._format_duration)
+
+        # 2. Ensure null values are handled correctly.
+        df_processed = df_processed.map(lambda x: pd.NA if x == "" else x)
+
+        # 3. Add timestamp column
+        df_processed["extract_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        return df_processed
+
+    def _format_duration(self, minutes: Any) -> Optional[str]:
+        """
+        Formats the duration in minutes to the '%h %min' format.
+
+        Args:
+            minutes: The duration in minutes (int or float)
+
+        Returns:
+            The formatted duration as a string ('%h %min') or None if invalid.
+        """
+        if pd.isna(minutes):
+            return None
+
+        try:
+            minutes_int = int(minutes)  # Ensure minutes is an integer
+            hours = minutes_int // 60
+            remaining_minutes = minutes_int % 60
+            if hours > 0 and remaining_minutes > 0:
+                return f"{hours}h {remaining_minutes}min"
+            elif hours > 0:
+                return f"{hours}h"
+            elif remaining_minutes > 0:
+                return f"{remaining_minutes}min"
+            else:
+                return "0min"
+        except (ValueError, TypeError):
+            return None
+
+    def close_spider(self, spider):
+        """
+        Cleans up resources when the spider closes.
+
+        Args:
+            spider: The spider being closed
+        """
+        # Save any remaining items
+        self.save_items(spider)
+
+        # Close the database connection
+        if self.engine:
+            self.engine.dispose()
+        spider.logger.info("PostgreSQL Pipeline closed")
+
+
 class PostgreSQLPipeline:
     """
     Pipeline for storing scraped items in a PostgreSQL database.
@@ -20,7 +212,7 @@ class PostgreSQLPipeline:
     data processing functionality to clean and transform the data.
     """
 
-    def __init__(self, postgres_uri: str, table_name: str, batch_size: int = 100):
+    def __init__(self, postgres_uri: str, table_name: str, schema: str, batch_size: int = 100):
         """
         Initialize the PostgreSQL pipeline.
 
@@ -31,6 +223,7 @@ class PostgreSQLPipeline:
         """
         self.postgres_uri = postgres_uri
         self.table_name = table_name
+        self.schema = schema
         self.batch_size = batch_size
         self.items: list[dict[str, Any]] = []
         self.engine = None
@@ -52,6 +245,7 @@ class PostgreSQLPipeline:
         return cls(
             postgres_uri=crawler.settings.get("POSTGRES_URI"),
             table_name=crawler.settings.get("POSTGRES_TABLE"),
+            schema=crawler.settings.get("POSTGRES_SCHEMA"),
             batch_size=crawler.settings.get("POSTGRES_BATCH_SIZE"),
         )
 
@@ -114,6 +308,7 @@ class PostgreSQLPipeline:
             # Save to PostgreSQL
             df.to_sql(
                 name=self.table_name,
+                schema=self.schema,
                 con=self.engine,
                 if_exists="append",  # Append data to existing table
                 index=False,
@@ -147,14 +342,7 @@ class PostgreSQLPipeline:
         df_processed = df.copy()
 
         # 1. Apply strip to text columns
-        text_columns = [
-            "ano",
-            "titulo",
-            "duracao",
-            "classificacao",
-            "sinopse",
-            "imdb_score"
-        ]
+        text_columns = ["ano", "titulo", "duracao", "classificacao", "sinopse", "imdb_score"]
 
         for col in text_columns:
             if col in df_processed.columns:
@@ -162,7 +350,9 @@ class PostgreSQLPipeline:
 
         # 2. Clean and convert year column
         df_processed["ano"] = (
-            df_processed["ano"].str.replace("(", "").str.replace(")", "")
+            df_processed["ano"]
+            .str.replace("(", "")
+            .str.replace(")", "")
             .replace("", pd.NA)
             .astype("Int64")
         )

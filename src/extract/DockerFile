@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Create and set working directory
-WORKDIR /extract
+WORKDIR /app
 
 # Install system dependencies required for psycopg2 and Playwright
 RUN apt-get update && apt-get install -y \
@@ -27,4 +27,4 @@ RUN playwright install chromium
 COPY . .
 
 # Default command to run when starting the container
-CMD ["scrapy", "crawl", "streaming_service"]
+CMD ["scrapy", "crawl", "streaming_service_api"]

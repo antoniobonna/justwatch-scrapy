@@ -1,4 +1,5 @@
 import json
+
 import scrapy
 from scrapy.exceptions import CloseSpider
 
@@ -50,8 +51,8 @@ class StreamingServiceSpider(scrapy.Spider):
         Yields:
             scrapy.Request:  GraphQL POST requests for each provider and category.
         """
-        for provider in self.providers:
-            for category in self.categories:
+        for provider in ["prv"]:
+            for category in ["filmes"]:
                 # Determine the object type based on the category
                 object_type = "MOVIE" if category == "filmes" else "SHOW"
 
@@ -241,7 +242,6 @@ class StreamingServiceSpider(scrapy.Spider):
             imdb_count = content.get("scoring", {}).get("imdbVotes")
             classification = content.get("ageCertification")
             synopsis = content.get("shortDescription")
-
 
             # Create and yield item with all extracted data
             yield {

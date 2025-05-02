@@ -7,6 +7,8 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
+import os
+
 BOT_NAME = "extract"
 
 SPIDER_MODULES = ["extract.spiders"]
@@ -131,7 +133,7 @@ PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = 30000
 PLAYWRIGHT_MAX_CONTEXTS = 3
 PLAYWRIGHT_PROCESS_REQUEST_HEADERS = None
 
-POSTGRES_URI = "postgresql://postgres:mysecretpassword@localhost:5432/datawarehouse"
+POSTGRES_URI = os.environ.get("POSTGRES_URI")
 POSTGRES_TABLE = "justwatch_tb"
 POSTGRES_SCHEMA = "streaming_s"
 POSTGRES_BATCH_SIZE = 100  # Número de itens a serem salvos por vez

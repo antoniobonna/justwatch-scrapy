@@ -1,0 +1,63 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # Banco de dados
+  db:
+    image: postgres:latest
+    container_name: postgres-analytics
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=datawarehouse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Inicialização do banco com script SQL
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - streaming-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analista -d datawarehouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # API para acesso aos dados
+  scrapy:
+    build: ./src/extract
+    container_name: scrapy
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - POSTGRES_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/datawarehouse
+    volumes:
+      - ./src/extract:/app
+    networks:
+      - streaming-network
+    restart: unless-stopped
+
+  # Dashboard para visualização
+  dashboard:
+    build: ./src/dashboard
+    container_name: streaming-dashboard
+    depends_on:
+      - scrapy
+    environment:
+      - POSTGRES_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/datawarehouse
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./src/dashboard:/app
+    networks:
+      - streaming-network
+    restart: unless-stopped
+
+networks:
+  streaming-network:
+
+volumes:
+  postgres_data:
